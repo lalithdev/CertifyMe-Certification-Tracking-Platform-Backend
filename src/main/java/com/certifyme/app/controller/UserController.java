@@ -1,36 +1,42 @@
 package com.certifyme.app.controller;
 
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import com.certifyme.app.dto.PagedResponseDTO;
+import com.certifyme.app.dto.UserResponseDTO;
+import com.certifyme.app.service.UserService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import com.certifyme.app.User;
-import com.certifyme.app.service.UserService;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin
 public class UserController {
 
-    @Autowired
-    private UserService service;
+    private final UserService userService;
 
-    // ✅ REGISTER
-    @PostMapping("/register")
-    public User register(@RequestBody User user) {
-        return service.register(user);
+    public UserController(UserService userService) {
+        this.userService = userService;
     }
 
-    // ✅ LOGIN (VERY IMPORTANT)
-    @PostMapping("/login")
-    public User login(@RequestBody User user) {
-        System.out.println("EMAIL: " + user.getEmail());
-        System.out.println("PASSWORD: " + user.getPassword());
-        return service.login(user.getEmail(), user.getPassword());
+    @GetMapping("/{id}")
+    public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserById(id));
     }
+
     @GetMapping
-    public List<User> getAllUsers() {
-        return service.getAllUsers();
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserResponseDTO>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
+
+    @GetMapping("/students")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PagedResponseDTO<UserResponseDTO>> getAllStudents(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(userService.getAllStudents(PageRequest.of(page, size)));
     }
 }
