@@ -4,7 +4,6 @@ package com.certifyme.app.scheduler;
 import com.certifyme.app.model.Certification;
 import com.certifyme.app.repository.CertificationRepository;
 import com.certifyme.app.service.NotificationService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
