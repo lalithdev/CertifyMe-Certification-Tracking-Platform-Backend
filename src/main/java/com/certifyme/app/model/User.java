@@ -13,10 +13,12 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
-@Data
-@Builder
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@ToString(exclude = {"certifications", "notifications"})
 public class User implements UserDetails {
 
     @Id
@@ -76,6 +78,9 @@ public class User implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (role == null) {
+            return List.of();
+        }
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 

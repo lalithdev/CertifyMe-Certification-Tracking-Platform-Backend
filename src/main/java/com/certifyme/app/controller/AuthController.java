@@ -33,4 +33,9 @@ public class AuthController {
     public ResponseEntity<AuthResponseDTO> resendOtp(@Valid @RequestBody ResendOtpRequestDTO request) {
         return ResponseEntity.ok(authService.resendOtp(request.getEmail()));
     }
+
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("Backend is running correctly!");
+    }
 }

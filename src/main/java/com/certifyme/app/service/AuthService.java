@@ -12,8 +12,6 @@ import com.certifyme.app.model.User;
 import com.certifyme.app.repository.UserRepository;
 import com.certifyme.app.security.JwtService;
 import com.certifyme.app.util.OtpUtils;
-import jakarta.mail.MessagingException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,10 +29,10 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
 
-    public AuthService(UserRepository userRepository, 
-                       UserMapper userMapper, 
-                       PasswordEncoder passwordEncoder, 
-                       JwtService jwtService, 
+    public AuthService(UserRepository userRepository,
+                       UserMapper userMapper,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService,
                        AuthenticationManager authenticationManager,
                        EmailService emailService) {
         this.userRepository = userRepository;
@@ -52,13 +50,13 @@ public class AuthService {
 
         User user = userMapper.toEntity(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        
+
         userRepository.save(user);
 
         String jwtToken = jwtService.generateToken(user);
         UserResponseDTO userDTO = userMapper.toResponseDTO(user);
 
-        return new AuthResponseDTO(jwtToken, userDTO);
+        return AuthResponseDTO.ofSuccess(jwtToken, userDTO);
     }
 
     public AuthResponseDTO login(LoginRequestDTO request) {
@@ -97,14 +95,18 @@ public class AuthService {
                 emailService.sendOtpEmail(user.getEmail(), otp);
 
                 // Return timers for initial demand
-                return new AuthResponseDTO(null, null, true, 120L, 30L);
+                return AuthResponseDTO.builder()
+                        .otpRequired(true)
+                        .remainingValiditySeconds(120L)
+                        .resendCooldownSeconds(30L)
+                        .build();
             }
 
             // Case B: OTP provided - validate
             String hashedInput = OtpUtils.hashOTP(submittedOtp);
-            
+
             // Check Expiry (2 Minutes)
-            if (user.getOtpCreatedAt() == null || 
+            if (user.getOtpCreatedAt() == null ||
                 user.getOtpCreatedAt().isBefore(LocalDateTime.now().minusMinutes(2))) {
                 throw new UnauthorizedException("OTP expired");
             }
@@ -132,7 +134,7 @@ public class AuthService {
         String jwtToken = jwtService.generateToken(user);
         UserResponseDTO userDTO = userMapper.toResponseDTO(user);
 
-        return new AuthResponseDTO(jwtToken, userDTO);
+        return AuthResponseDTO.ofSuccess(jwtToken, userDTO);
     }
 
     public AuthResponseDTO resendOtp(String email) {
@@ -166,6 +168,10 @@ public class AuthService {
         // Send Email
         emailService.sendOtpEmail(user.getEmail(), otp);
 
-        return new AuthResponseDTO(null, null, true, 120L, 30L);
+        return AuthResponseDTO.builder()
+                .otpRequired(true)
+                .remainingValiditySeconds(120L)
+                .resendCooldownSeconds(30L)
+                .build();
     }
 }

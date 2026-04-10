@@ -17,7 +17,9 @@ public class UserMapper {
                 .email(dto.getEmail())
                 .password(dto.getPassword()) // Will be encoded by AuthService
                 .age(dto.getAge())
-                .gender(dto.getGender() != null && !dto.getGender().isBlank() ? dto.getGender() : "Prefer not to say")
+                .gender(dto.getGender() != null && !dto.getGender().isBlank() 
+                        ? dto.getGender() 
+                        : "Prefer not to say")
                 .country(dto.getCountry())
                 .studentId(dto.getStudentId())
                 .role(Role.STUDENT)
@@ -26,6 +28,7 @@ public class UserMapper {
 
     public UserResponseDTO toResponseDTO(User user) {
         UserResponseDTO dto = new UserResponseDTO();
+
         dto.setId(user.getId());
         dto.setFirstName(user.getFirstName());
         dto.setMiddleName(user.getMiddleName());
@@ -36,10 +39,13 @@ public class UserMapper {
         dto.setGender(user.getGender());
         dto.setCountry(user.getCountry());
         dto.setStudentId(user.getStudentId());
-        
-        // Map certification count
-        dto.setCertificationCount(user.getCertifications() != null ? user.getCertifications().size() : 0);
-        
+
+        dto.setCertificationCount(
+            user.getCertifications() != null 
+                ? user.getCertifications().size() 
+                : 0
+        );
+
         return dto;
     }
 }
