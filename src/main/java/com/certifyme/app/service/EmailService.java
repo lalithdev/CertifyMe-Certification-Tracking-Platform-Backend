@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -29,7 +28,7 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
-    @Async
+    // @Async removed — running synchronously to fix silent async thread failure
     public void sendOtpEmail(String toEmail, String otp) {
         log.info("Sending OTP email to: {} (from: {})", toEmail, fromEmail);
 
