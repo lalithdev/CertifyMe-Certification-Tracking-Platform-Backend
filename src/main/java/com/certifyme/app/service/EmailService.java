@@ -94,6 +94,9 @@ public class EmailService {
                     </tr>
                     </table>
 
+                    <div style="text-align: center; font-size: 12px; color: #666666; margin-top: 20px;">
+                        This email was sent by CertifyMe
+                    </div>
                     </body>
                     </html>
                     """
@@ -103,10 +106,10 @@ public class EmailService {
                     "personalizations", List.of(
                             Map.of(
                                     "to", List.of(Map.of("email", toEmail)),
-                                    "subject", "Admin Login - Verification Code"
+                                    "subject", "Your CertifyMe Verification Code"
                             )
                     ),
-                    "from", Map.of("email", fromEmail),
+                    "from", Map.of("email", fromEmail, "name", "CertifyMe"),
                     "content", List.of(
                             Map.of(
                                     "type", "text/html",
