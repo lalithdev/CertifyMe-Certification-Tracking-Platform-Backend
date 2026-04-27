@@ -1,20 +1,23 @@
 package com.certifyme.app.service;
 
-import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
 public class EmailService {
 
-    private final JavaMailSender mailSender;
-
-    @Value("${spring.mail.username}")
-    private String emailUser;
+    @Value("${EMAIL_PASS:${spring.mail.password:}}")
+    private String sendGridApiKey;
 
     /**
      * The verified sender address for outgoing emails.
@@ -24,22 +27,17 @@ public class EmailService {
     @Value("${app.mail.from:verify.certifyme@gmail.com}")
     private String fromEmail;
 
-    public EmailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
+    private final RestTemplate restTemplate;
+
+    public EmailService() {
+        this.restTemplate = new RestTemplate();
     }
 
     // @Async removed — running synchronously to fix silent async thread failure
     public void sendOtpEmail(String toEmail, String otp) {
-        log.info("Sending OTP email to: {} (from: {})", toEmail, fromEmail);
+        log.info("Sending OTP email to: {} (from: {}) via SendGrid API", toEmail, fromEmail);
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromEmail);
-            helper.setTo(toEmail);
-            helper.setSubject("Admin Login - Verification Code");
-
             String content = """
                     <!DOCTYPE html>
                     <html lang="en">
@@ -101,12 +99,38 @@ public class EmailService {
                     """
                     .formatted(otp);
 
-            helper.setText(content, true);
-            mailSender.send(message);
-            log.info("OTP email sent successfully to: {}", toEmail);
+            Map<String, Object> requestBody = Map.of(
+                    "personalizations", List.of(
+                            Map.of(
+                                    "to", List.of(Map.of("email", toEmail)),
+                                    "subject", "Admin Login - Verification Code"
+                            )
+                    ),
+                    "from", Map.of("email", fromEmail),
+                    "content", List.of(
+                            Map.of(
+                                    "type", "text/html",
+                                    "value", content
+                            )
+                    )
+            );
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(sendGridApiKey);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity("https://api.sendgrid.com/v3/mail/send", entity, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("OTP email sent successfully to: {}", toEmail);
+            } else {
+                log.error("Failed to send OTP email to: {}. Response: {}", toEmail, response.getBody());
+            }
 
         } catch (Exception e) {
-            log.error("Failed to send OTP email to: {}", toEmail, e);
+            log.error("Exception occurred while sending OTP email to: {}", toEmail, e);
         }
     }
 }
