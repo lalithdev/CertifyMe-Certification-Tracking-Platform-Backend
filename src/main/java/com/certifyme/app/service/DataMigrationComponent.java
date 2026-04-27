@@ -23,24 +23,36 @@ public class DataMigrationComponent implements CommandLineRunner {
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * Checks if a password string is a VALID BCrypt hash.
+     * A real BCrypt hash: starts with $2a$/$2b$/$2y$, is exactly 60 characters.
+     * This prevents fabricated hashes (correct prefix but wrong content) from
+     * being skipped during migration.
+     */
+    private boolean isValidBCryptHash(String pwd) {
+        if (pwd == null || pwd.length() != 60) return false;
+        return pwd.startsWith("$2a$") || pwd.startsWith("$2b$") || pwd.startsWith("$2y$");
+    }
+
     @Override
     public void run(String... args) throws Exception {
-        log.info("Checking for plaintext passwords to migrate...");
+        log.info("[DataMigration] Checking for non-BCrypt passwords to migrate...");
         List<User> users = userRepository.findAll();
         int migratedCount = 0;
         for (User user : users) {
             String pwd = user.getPassword();
-            // A BCrypt hash starts with "$2a$" or "$2b$" or "$2y$" and is 60 chars long.
-            if (pwd != null && !pwd.isEmpty() && !(pwd.startsWith("$2a$") || pwd.startsWith("$2b$") || pwd.startsWith("$2y$"))) {
+            if (!isValidBCryptHash(pwd)) {
+                log.warn("[DataMigration] Migrating password for user id={} email={} (was not a valid BCrypt hash)",
+                        user.getId(), user.getEmail());
                 user.setPassword(passwordEncoder.encode(pwd));
                 userRepository.save(user);
                 migratedCount++;
             }
         }
         if (migratedCount > 0) {
-            log.info("Successfully migrated {} passwords to BCrypt.", migratedCount);
+            log.info("[DataMigration] Migrated {} password(s) to BCrypt.", migratedCount);
         } else {
-            log.info("No passwords needed migration.");
+            log.info("[DataMigration] All passwords are already valid BCrypt hashes. No migration needed.");
         }
 
         // Add a default admin if none exists so users can test OTP admin flow safely

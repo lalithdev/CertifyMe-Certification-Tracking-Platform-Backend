@@ -1,15 +1,16 @@
 package com.certifyme.app.controller;
 
 import com.certifyme.app.dto.*;
+import com.certifyme.app.model.User;
 import com.certifyme.app.service.CertificationService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
@@ -71,10 +72,12 @@ public class CertificationController {
     }
 
     @PutMapping("/{id}/renewal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STUDENT')")
     public ResponseEntity<CertificationResponseDTO> updateRenewalStatus(
             @PathVariable Long id,
-            @RequestParam String status) {
-        return ResponseEntity.ok(service.updateRenewalStatus(id, status));
+            @Valid @RequestBody CertificationRenewalDTO renewalDTO,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(service.updateRenewalStatus(id, renewalDTO, user));
     }
 
     @PutMapping("/{id}/remind")
