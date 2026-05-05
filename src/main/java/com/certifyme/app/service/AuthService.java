@@ -5,6 +5,7 @@ import com.certifyme.app.dto.LoginRequestDTO;
 import com.certifyme.app.dto.RegisterRequestDTO;
 import com.certifyme.app.dto.UserResponseDTO;
 import com.certifyme.app.exception.DuplicateResourceException;
+import com.certifyme.app.exception.ResourceNotFoundException;
 import com.certifyme.app.exception.UnauthorizedException;
 import com.certifyme.app.mapper.UserMapper;
 import com.certifyme.app.model.PasswordResetToken;
@@ -18,10 +19,12 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 @Service
+@Transactional
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -182,7 +185,7 @@ public class AuthService {
 
     public AuthResponseDTO forgotPassword(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UnauthorizedException("User with this email does not exist"));
+                .orElseThrow(() -> new ResourceNotFoundException("User with this email does not exist"));
 
         String otp = OtpUtils.generateOTP();
         PasswordResetToken token = PasswordResetToken.builder()
@@ -211,7 +214,16 @@ public class AuthService {
             throw new UnauthorizedException("OTP expired");
         }
 
+        // Fetch user to generate session
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        String jwtToken = jwtService.generateToken(user);
+        UserResponseDTO userDTO = userMapper.toResponseDTO(user);
+
         return AuthResponseDTO.builder()
+                .token(jwtToken)
+                .user(userDTO)
                 .message("OTP verified successfully")
                 .build();
     }
