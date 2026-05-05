@@ -7,8 +7,10 @@ import com.certifyme.app.dto.UserResponseDTO;
 import com.certifyme.app.exception.DuplicateResourceException;
 import com.certifyme.app.exception.UnauthorizedException;
 import com.certifyme.app.mapper.UserMapper;
+import com.certifyme.app.model.PasswordResetToken;
 import com.certifyme.app.model.Role;
 import com.certifyme.app.model.User;
+import com.certifyme.app.repository.PasswordResetTokenRepository;
 import com.certifyme.app.repository.UserRepository;
 import com.certifyme.app.security.JwtService;
 import com.certifyme.app.util.OtpUtils;
@@ -28,19 +30,22 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     public AuthService(UserRepository userRepository,
                        UserMapper userMapper,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
                        AuthenticationManager authenticationManager,
-                       EmailService emailService) {
+                       EmailService emailService,
+                       PasswordResetTokenRepository passwordResetTokenRepository) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.emailService = emailService;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
 
     public AuthResponseDTO register(RegisterRequestDTO request) {
@@ -172,6 +177,84 @@ public class AuthService {
                 .otpRequired(true)
                 .remainingValiditySeconds(120L)
                 .resendCooldownSeconds(30L)
+                .build();
+    }
+
+    public AuthResponseDTO forgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UnauthorizedException("User with this email does not exist"));
+
+        String otp = OtpUtils.generateOTP();
+        PasswordResetToken token = PasswordResetToken.builder()
+                .email(email)
+                .otp(otp)
+                .expiresAt(LocalDateTime.now().plusMinutes(10))
+                .build();
+
+        passwordResetTokenRepository.save(token);
+        emailService.sendOtpEmail(email, otp);
+
+        return AuthResponseDTO.builder()
+                .message("OTP sent to your email")
+                .build();
+    }
+
+    public AuthResponseDTO verifyResetOtp(String email, String otp) {
+        PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
+                .orElseThrow(() -> new UnauthorizedException("Invalid OTP"));
+
+        if (token.isUsed()) {
+            throw new UnauthorizedException("OTP already used");
+        }
+
+        if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new UnauthorizedException("OTP expired");
+        }
+
+        return AuthResponseDTO.builder()
+                .message("OTP verified successfully")
+                .build();
+    }
+
+    public AuthResponseDTO resetPassword(String email, String otp, String newPassword) {
+        PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
+                .orElseThrow(() -> new UnauthorizedException("Invalid OTP"));
+
+        if (token.isUsed()) {
+            throw new UnauthorizedException("OTP already used");
+        }
+
+        if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new UnauthorizedException("OTP expired");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        token.setUsed(true);
+        passwordResetTokenRepository.save(token);
+
+        return AuthResponseDTO.builder()
+                .message("Password reset successfully")
+                .build();
+    }
+
+    public AuthResponseDTO changePassword(String email, String currentPassword, String newPassword) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new UnauthorizedException("Invalid current password");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        return AuthResponseDTO.builder()
+                .message("Password updated successfully")
                 .build();
     }
 }

@@ -2,40 +2,30 @@ package com.certifyme.app.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.List;
-import java.util.Map;
+import jakarta.mail.internet.MimeMessage;
 
 @Slf4j
 @Service
 public class EmailService {
 
-    @Value("${EMAIL_PASS:${spring.mail.password:}}")
-    private String sendGridApiKey;
+    private final JavaMailSender mailSender;
 
     /**
      * The verified sender address for outgoing emails.
-     * In prod: set app.mail.from to your SendGrid verified sender email.
-     * In dev: defaults to the local stub address.
      */
     @Value("${app.mail.from:verify.certifyme@gmail.com}")
     private String fromEmail;
 
-    private final RestTemplate restTemplate;
-
-    public EmailService() {
-        this.restTemplate = new RestTemplate();
+    public EmailService(JavaMailSender mailSender) {
+        this.mailSender = mailSender;
     }
 
     // @Async removed — running synchronously to fix silent async thread failure
     public void sendOtpEmail(String toEmail, String otp) {
-        log.info("Sending OTP email to: {} (from: {}) via SendGrid API", toEmail, fromEmail);
+        log.info("Sending OTP email to: {} (from: {}) via Google SMTP", toEmail, fromEmail);
 
         try {
             String content = """
@@ -66,7 +56,7 @@ public class EmailService {
                     <td align="center" style="padding: 50px 40px 40px 40px;">
 
                     <h1 style="margin: 0 0 25px 0; font-size: 26px; font-weight: 800; color: #111111;">
-                    Admin Login Verification
+                    CertifyMe Verification
                     </h1>
 
                     <p style="margin: 0 0 35px 0; font-size: 16px; color: #111111;">
@@ -102,35 +92,16 @@ public class EmailService {
                     """
                     .formatted(otp);
 
-            Map<String, Object> requestBody = Map.of(
-                    "personalizations", List.of(
-                            Map.of(
-                                    "to", List.of(Map.of("email", toEmail)),
-                                    "subject", "Your CertifyMe Verification Code"
-                            )
-                    ),
-                    "from", Map.of("email", fromEmail, "name", "CertifyMe"),
-                    "content", List.of(
-                            Map.of(
-                                    "type", "text/html",
-                                    "value", content
-                            )
-                    )
-            );
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(sendGridApiKey);
+            helper.setFrom(fromEmail, "CertifyMe");
+            helper.setTo(toEmail);
+            helper.setSubject("Your CertifyMe Verification Code");
+            helper.setText(content, true);
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity("https://api.sendgrid.com/v3/mail/send", entity, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("OTP email sent successfully to: {}", toEmail);
-            } else {
-                log.error("Failed to send OTP email to: {}. Response: {}", toEmail, response.getBody());
-            }
+            mailSender.send(message);
+            log.info("OTP email sent successfully to: {}", toEmail);
 
         } catch (Exception e) {
             log.error("Exception occurred while sending OTP email to: {}", toEmail, e);

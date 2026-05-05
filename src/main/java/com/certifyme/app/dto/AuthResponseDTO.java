@@ -31,6 +31,8 @@ public class AuthResponseDTO {
     private Long remainingValiditySeconds;
 
     private Long resendCooldownSeconds;
+    
+    private String message;
 
     /**
      * Convenience factory method for standard (non-OTP) authentication responses.
