@@ -1,7 +1,9 @@
 package com.certifyme.app.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -13,14 +15,21 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    /**
-     * The verified sender address for outgoing emails.
-     */
+    /** Verified sender address — set via app.mail.from in the active profile. */
     @Value("${app.mail.from:verify.certifyme@gmail.com}")
     private String fromEmail;
 
+    /** SMTP host resolved from the active profile — logged at startup for verification. */
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String mailHost;
+
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
+    }
+
+    @PostConstruct
+    public void logMailConfig() {
+        log.info("[EmailService] Initialized — SMTP host: {}, sender: {}", mailHost, fromEmail);
     }
 
     // @Async removed — running synchronously to fix silent async thread failure
@@ -103,8 +112,14 @@ public class EmailService {
             mailSender.send(message);
             log.info("OTP email sent successfully to: {}", toEmail);
 
+        } catch (MailException e) {
+            log.error("[EmailService] SMTP delivery failed to: {} via host: {}", toEmail, mailHost, e);
+            // Re-throw so the calling service can surface a proper HTTP 500
+            // instead of silently returning a false-success 200 to the client.
+            throw new RuntimeException("Email delivery failed. Please try again later.", e);
         } catch (Exception e) {
-            log.error("Exception occurred while sending OTP email to: {}", toEmail, e);
+            log.error("[EmailService] Unexpected error sending OTP to: {}", toEmail, e);
+            throw new RuntimeException("Email delivery failed due to an unexpected error.", e);
         }
     }
 }
