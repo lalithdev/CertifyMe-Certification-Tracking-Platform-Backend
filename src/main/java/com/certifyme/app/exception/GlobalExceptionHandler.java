@@ -1,6 +1,7 @@
 package com.certifyme.app.exception;
 
 import com.certifyme.app.dto.ApiErrorResponseDTO;
+import com.certifyme.app.service.EmailService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponseDTO> handleIllegalArgumentException(IllegalArgumentException ex, HttpServletRequest request) {
         log.warn("Bad request - illegal argument: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(EmailService.EmailDeliveryException.class)
+    public ResponseEntity<ApiErrorResponseDTO> handleEmailDeliveryException(EmailService.EmailDeliveryException ex, HttpServletRequest request) {
+        log.error("[EMAIL FAILURE] Email delivery failed on {}: {}", request.getRequestURI(), ex.getMessage());
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Email Service Unavailable", ex.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(Exception.class)

@@ -15,6 +15,7 @@ import com.certifyme.app.repository.PasswordResetTokenRepository;
 import com.certifyme.app.repository.UserRepository;
 import com.certifyme.app.security.JwtService;
 import com.certifyme.app.util.OtpUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @Transactional
 public class AuthService {
@@ -98,8 +100,7 @@ public class AuthService {
                 user.setOtpAttempts(0); // RESET ON NEW GEN
                 userRepository.save(user);
 
-                // Dispatch OTP email immediately using the async worker
-                System.out.println("OTP requested for email: " + user.getEmail());
+                log.info("[AuthService] Admin OTP generated for: {}", user.getEmail());
                 emailService.sendOtpEmail(user.getEmail(), otp);
 
                 // Return timers for initial demand
@@ -183,10 +184,19 @@ public class AuthService {
                 .build();
     }
 
+    /**
+     * Forgot Password flow — works identically for STUDENT and ADMIN.
+     * Generates an OTP, persists it, and sends it via SendGrid.
+     */
     public AuthResponseDTO forgotPassword(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User with this email does not exist"));
+        log.info("[AuthService] Forgot password request for: {}", email);
 
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("No account found with this email address"));
+
+        log.info("[AuthService] User found: id={}, role={}", user.getId(), user.getRole());
+
+        // Generate OTP and persist the token
         String otp = OtpUtils.generateOTP();
         PasswordResetToken token = PasswordResetToken.builder()
                 .email(email)
@@ -195,14 +205,24 @@ public class AuthService {
                 .build();
 
         passwordResetTokenRepository.save(token);
+        log.info("[AuthService] Reset token saved for: {}", email);
+
+        // Send OTP email via SendGrid API
         emailService.sendOtpEmail(email, otp);
+        log.info("[AuthService] OTP email dispatched to: {}", email);
 
         return AuthResponseDTO.builder()
                 .message("OTP sent to your email")
                 .build();
     }
 
+    /**
+     * Verify OTP for password reset — works identically for STUDENT and ADMIN.
+     * Returns a JWT session so the user can proceed to reset or go to dashboard.
+     */
     public AuthResponseDTO verifyResetOtp(String email, String otp) {
+        log.info("[AuthService] Verify OTP request for: {}", email);
+
         PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
                 .orElseThrow(() -> new UnauthorizedException("Invalid OTP"));
 
@@ -221,6 +241,8 @@ public class AuthService {
         String jwtToken = jwtService.generateToken(user);
         UserResponseDTO userDTO = userMapper.toResponseDTO(user);
 
+        log.info("[AuthService] OTP verified successfully for: {}", email);
+
         return AuthResponseDTO.builder()
                 .token(jwtToken)
                 .user(userDTO)
@@ -228,7 +250,13 @@ public class AuthService {
                 .build();
     }
 
+    /**
+     * Reset password after OTP verification — works identically for STUDENT and ADMIN.
+     * Invalidates the OTP after use and encodes the new password with BCrypt.
+     */
     public AuthResponseDTO resetPassword(String email, String otp, String newPassword) {
+        log.info("[AuthService] Reset password request for: {}", email);
+
         PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
                 .orElseThrow(() -> new UnauthorizedException("Invalid OTP"));
 
@@ -246,15 +274,24 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
+        // Invalidate the OTP token after use
         token.setUsed(true);
         passwordResetTokenRepository.save(token);
+
+        log.info("[AuthService] Password reset successfully for: {}", email);
 
         return AuthResponseDTO.builder()
                 .message("Password reset successfully")
                 .build();
     }
 
+    /**
+     * Change password (authenticated) — requires current password verification.
+     * Works for both STUDENT and ADMIN.
+     */
     public AuthResponseDTO changePassword(String email, String currentPassword, String newPassword) {
+        log.info("[AuthService] Change password request for: {}", email);
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
 
@@ -264,6 +301,8 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+
+        log.info("[AuthService] Password changed successfully for: {}", email);
 
         return AuthResponseDTO.builder()
                 .message("Password updated successfully")
