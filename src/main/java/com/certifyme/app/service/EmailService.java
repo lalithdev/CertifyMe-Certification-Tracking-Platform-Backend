@@ -25,7 +25,7 @@ public class EmailService {
 
     // @Async removed — running synchronously to fix silent async thread failure
     public void sendOtpEmail(String toEmail, String otp) {
-        log.info("Sending OTP email to: {} (from: {}) via Google SMTP", toEmail, fromEmail);
+        log.info("Attempting to send OTP email to: {} (using sender: {})", toEmail, fromEmail);
 
         try {
             String content = """
