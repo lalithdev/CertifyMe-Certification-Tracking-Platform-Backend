@@ -101,7 +101,7 @@ public class AuthService {
                 userRepository.save(user);
 
                 log.info("[AuthService] Admin OTP generated for: {}", user.getEmail());
-                emailService.sendOtpEmail(user.getEmail(), otp);
+                emailService.sendOtpEmail(user.getEmail(), user.getFirstName(), otp);
 
                 // Return timers for initial demand
                 return AuthResponseDTO.builder()
@@ -175,7 +175,7 @@ public class AuthService {
         userRepository.save(user);
 
         // Send Email
-        emailService.sendOtpEmail(user.getEmail(), otp);
+        emailService.sendOtpEmail(user.getEmail(), user.getFirstName(), otp);
 
         return AuthResponseDTO.builder()
                 .otpRequired(true)
@@ -207,8 +207,8 @@ public class AuthService {
         passwordResetTokenRepository.save(token);
         log.info("[AuthService] Reset token saved for: {}", email);
 
-        // Send OTP email via SendGrid API
-        emailService.sendOtpEmail(email, otp);
+        // Send OTP email via SendGrid API — pass first name for personalised greeting
+        emailService.sendOtpEmail(email, user.getFirstName(), otp);
         log.info("[AuthService] OTP email dispatched to: {}", email);
 
         return AuthResponseDTO.builder()
